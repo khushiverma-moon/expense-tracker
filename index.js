@@ -1,15 +1,5 @@
 const express = require('express');
 const mongoose = require('mongoose');
-
-const bcrypt = require('bcryptjs');
-
-const User = require('./models/User');
-
-const jwt = require('jsonwebtoken');
-
-const Expense = require('./models/Expense');
-const express = require('express');
-const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
