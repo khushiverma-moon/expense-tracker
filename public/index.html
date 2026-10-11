@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expense Tracker</title>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 2rem 1rem; }
+    .container { max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+    .card { background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    h2 { margin-bottom: 1rem; font-size: 1.25rem; }
+    input, select, button { width: 100%; padding: 0.65rem; margin-bottom: 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; }
+    button { background: var(--primary); color: white; border: none; font-weight: 600; cursor: pointer; }
+    button:hover { opacity: 0.9; }
+    .btn-danger { background: #ef4444; width: auto; padding: 0.3rem 0.6rem; font-size: 0.85rem; }
+    .expense-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border); }
+    .expense-item:last-child { border-bottom: none; }
+    .hidden { display: none; }
+    .badge { background: #e0e7ff; color: var(--primary); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+    .summary-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+    .category-chip { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 0.4rem 0.75rem; border-radius: 20px; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- AUTH SECTION -->
+    <div id="auth-section" class="card">
+      <h2 id="auth-title">Login</h2>
+      <input type="text" id="name" placeholder="Full Name (for signup only)" class="hidden" />
+      <input type="email" id="email" placeholder="Email Address" required />
+      <input type="password" id="password" placeholder="Password" required />
+      <button id="auth-btn" onclick="handleAuth()">Login</button>
+      <p style="font-size: 0.85rem; text-align: center; margin-top: 0.5rem;">
+        <span id="toggle-text">Don't have an account?</span> 
+        <a href="#" onclick="toggleAuthMode()" style="color: var(--primary); font-weight: 600;">Switch</a>
+      </p>
+    </div>
+
+    <!-- DASHBOARD SECTION -->
+    <div id="dashboard-section" class="hidden">
+      <!-- Summary Card -->
+      <div class="card" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, #4f46e5, #6366f1); color: white;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <p style="font-size: 0.9rem; opacity: 0.9;">Total Spent</p>
+            <h1 id="total-amount" style="font-size: 2.2rem; margin: 0.2rem 0;">₹0</h1>
+          </div>
+          <button class="btn-danger" onclick="logout()" style="background: rgba(255,255,255,0.2);">Logout</button>
+        </div>
+        <div id="category-summary" class="summary-grid"></div>
+      </div>
+
+      <!-- Add Expense Card -->
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <h2>Add New Expense</h2>
+        <form onsubmit="handleAddExpense(event)">
+          <input type="text" id="expense-title" placeholder="Title (e.g. Lunch)" required />
+          <input type="number" id="expense-amount" placeholder="Amount (₹)" required min="1" />
+          <select id="expense-category">
+            <option value="Food">Food</option>
+            <option value="Travel">Travel</option>
+            <option value="Rent">Rent</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Bills">Bills</option>
+            <option value="Other">Other</option>
+          </select>
+          <button type="submit">Add Expense</button>
+        </form>
+      </div>
+
+      <!-- Expense List Card -->
+      <div class="card">
+        <h2>Your Expenses</h2>
+        <div id="expense-list">Loading expenses...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let isSignup = false;
+
+    function toggleAuthMode() {
+      isSignup = !isSignup;
+      document.getElementById('name').classList.toggle('hidden', !isSignup);
+      document.getElementById('auth-title').innerText = isSignup ? 'Sign Up' : 'Login';
+      document.getElementById('auth-btn').innerText = isSignup ? 'Sign Up' : 'Login';
+      document.getElementById('toggle-text').innerText = isSignup ? 'Already have an account?' : "Don't have an account?";
+    }
+
+    async function handleAuth() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const name = document.getElementById('name').value;
+
+      const endpoint = isSignup ? '/signup' : '/login';
+      const body = isSignup ? { name, email, password } : { email, password };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json();
+      if (!res.ok) return alert(data.message || 'Something went wrong');
+
+      if (isSignup) {
+        alert('Registered successfully! Now log in.');
+        toggleAuthMode();
+      } else {
+        localStorage.setItem('token', data.token);
+        renderView();
+      }
+    }
+
+    // Fetch summary analytics
+    async function fetchSummary() {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/expenses/summary', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!res.ok) return;
+      const data = await res.json();
+
+      document.getElementById('total-amount').innerText = `₹${data.grandTotal || 0}`;
+
+      const catEl = document.getElementById('category-summary');
+      if (data.categoryStats && data.categoryStats.length > 0) {
+        catEl.innerHTML = data.categoryStats.map(c => `
+          <div class="category-chip" style="color: #1e293b; background: rgba(255,255,255,0.9);">
+            <strong>${c._id}:</strong> ₹${c.totalSpent} (${c.count})
+          </div>
+        `).join('');
+      } else {
+        catEl.innerHTML = '';
+      }
+    }
+
+    async function fetchExpenses() {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/expenses', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!res.ok) return;
+      const data = await res.json();
+      const listEl = document.getElementById('expense-list');
+
+      if (!data.expenses || data.expenses.length === 0) {
+        listEl.innerHTML = '<p style="color: #64748b;">No expenses recorded yet.</p>';
+        return;
+      }
+
+      listEl.innerHTML = data.expenses.map(item => `
+        <div class="expense-item">
+          <div>
+            <strong>${item.title}</strong>
+            <span class="badge">${item.category}</span>
+            <div style="font-size: 0.8rem; color: #64748b;">₹${item.amount}</div>
+          </div>
+          <button class="btn-danger" onclick="deleteExpense('${item._id}')">Delete</button>
+        </div>
+      `).join('');
+    }
+
+    async function handleAddExpense(e) {
+      e.preventDefault();
+      const token = localStorage.getItem('token');
+      const title = document.getElementById('expense-title').value;
+      const amount = Number(document.getElementById('expense-amount').value);
+      const category = document.getElementById('expense-category').value;
+
+      const res = await fetch('/expenses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ title, amount, category })
+      });
+
+      if (res.ok) {
+        document.getElementById('expense-title').value = '';
+        document.getElementById('expense-amount').value = '';
+        fetchExpenses();
+        fetchSummary();
+      } else {
+        const data = await res.json();
+        alert(data.message);
+      }
+    }
+
+    async function deleteExpense(id) {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/expenses/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchExpenses();
+        fetchSummary();
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      renderView();
+    }
+
+    function renderView() {
+      const token = localStorage.getItem('token');
+      document.getElementById('auth-section').classList.toggle('hidden', !!token);
+      document.getElementById('dashboard-section').classList.toggle('hidden', !token);
+      if (token) {
+        fetchExpenses();
+        fetchSummary();
+      }
+    }
+
+    renderView();
+  </script>
+</body>
+</html>
