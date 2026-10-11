@@ -8,20 +8,26 @@ const User = require('./models/User');
 const jwt = require('jsonwebtoken');
 
 const Expense = require('./models/Expense');
+const express = require('express');
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const User = require('./models/User');
+const Expense = require('./models/Expense');
 const authMiddleware = require('./middlewares/auth.middleware');
 
-const JWT_SECRET = 'my_super_secret_expense_key_123';
-
+// Read configurations from cloud environment, falling back to local defaults
+const JWT_SECRET = process.env.JWT_SECRET || 'my_super_secret_expense_key_123';
+const PORT = process.env.PORT || 5000;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/expense_tracker';
 
 const app = express();
 
-const PORT = 5000;
-
 app.use(express.json());
-
 app.use(express.static('public'));
 
-mongoose.connect('mongodb://127.0.0.1:27017/expense_tracker')
+mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('Connected to MongoDB successfully!');
   })
